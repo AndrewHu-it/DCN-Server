@@ -1,5 +1,7 @@
-
 from flask import Flask
+
+# Initialize the Flask application
+app = Flask(__name__)
 
 @app.route("/")
 def index():
@@ -8,7 +10,7 @@ def index():
     """
     return "Hello from the single-file Python Azure Web App!"
 
-
 if __name__ == "__main__":
     port = 8000
+    # Run the application on the specified host and port
     app.run(host="0.0.0.0", port=port)
