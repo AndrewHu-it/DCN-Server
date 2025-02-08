@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def hello():
-    return "Hello from Python Azure Web App!"
+    return "Hello from Python Azure Web App! THIS IS A TEST"
 
 if __name__ == "__main__":
     # Azure typically sets PORT via an environment variable; default to 8000 locally
