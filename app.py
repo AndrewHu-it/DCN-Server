@@ -11,6 +11,6 @@ def index():
     return "Hello from the single-file Python Azure Web App!"
 
 if __name__ == "__main__":
-    port = 8080
+    port = 8000
     # Run the application on the specified host and port
     app.run(host="0.0.0.0", port=port)
