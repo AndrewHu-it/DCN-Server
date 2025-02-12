@@ -8,7 +8,7 @@ def index():
     """
     A simple route that returns a text response.
     """
-    return "Hello from the single-file Python Azure Web App!"
+    return "Hello from the single-file Python Azure Web App! This is a test."
 
 if __name__ == "__main__":
     port = 8080
