@@ -1,9 +1,16 @@
+import os
 
 from flask import Flask
-from routes.getinfo import *
+# now we have to import the blueprints:
+from routes.index import index_bp
+from routes.api import api_bp
 
+# initialize the application:
 app = Flask(__name__)
 
-# main driver function
+app.register_blueprint(index_bp)
+app.register_blueprint(api_bp)
+
 if __name__ == '__main__':
-    app.run()
+    port = 8080
+    app.run(host='0.0.0.0', port=port)

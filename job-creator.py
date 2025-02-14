@@ -184,9 +184,6 @@ def main():
     for x in job_task[1]:
         print(x)
 
-    print("{} by {} with {} tasks".format(width, height, number_of_tasks))
-
-
 if __name__ == "__main__":
     main()
 
