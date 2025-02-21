@@ -1,3 +1,20 @@
-# Ignore the test file: 
+# Virtual environments
+.venv/
+venv/
+
+# Environment configurations
+.env
+
+# Test directories
 test/
+
+# Python bytecode and caches
+**/__pycache__/
+*.pyc
+
+# System files
+**/.DS_Store
+
+# IDE settings
+**/.idea/
 

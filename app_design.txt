@@ -1,0 +1,17 @@
+Decided to create a custom extended flask class:
+EX:
+
+In client.py for example, have to recast to ExtendedFlask in order to use DB:
+    app = cast(ExtendedFlask, current_app)
+    result = app.jobs_and_tasks_db.add("active_jobs", job)
+
+    #Also works:
+    result = current_app.jobs_and_tasks_db.add("active_jobs", job) # type: ignore
+
+
+
+
+
+
+
+
