@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify, abort, current_app
 from typing import cast
 from app.extended_flask import ExtendedFlask
 from ..utilities.job_creator import create_job_and_tasks
+from ..utilities.assign_tasks import assign_task
+
 
 # Create the blueprint for client-related routes
 client_bp = Blueprint('client_bp', __name__, url_prefix='/client')
@@ -57,13 +59,22 @@ def upload_job():
         job_result = app.jobs_and_tasks_db.add("active_jobs", job)
         job["_id"] = str(job_result.inserted_id)
 
-        # Insert each task into the "tasks" collection
+
+
+        # Insert each task into the "unassigned_tasks" collection
         for task in tasks:
-            task_result = app.jobs_and_tasks_db.add("active_tasks", task)
+            task_result = app.jobs_and_tasks_db.add("unassigned_tasks", task)
             task["_id"] = str(task_result.inserted_id)
 
-        # Return the job details with a 201 status code (Created)
 
+        #now that they are in the available collection we query that collection to assign all nodes in it.
+        all_unassigned_tasks = app.jobs_and_tasks_db.get_all("unassigned_tasks")
+        for task in all_unassigned_tasks:
+            task_id = task["task_id"]
+            assign_task(task_id)
+
+
+        # Return the job details with a 201 status code (Created)
         return_json: dict = {
             "job_id": job["job_id"],
             "client_id": job["client_id"],
@@ -85,9 +96,12 @@ def get_job(job_id):
     """
     Handle GET requests to retrieve a job by its ID.
     Returns the job details if found, or a 404 error if not.
+
+
     """
+
     app = cast(ExtendedFlask, current_app)
-    job = app.jobs_and_tasks_db.query("active_jobs", "job_id", str(job_id))
+    job = app.jobs_and_tasks_db.query_one_attribute("active_jobs", "job_id", str(job_id))
 
     if job:
         return jsonify(job)
@@ -96,8 +110,13 @@ def get_job(job_id):
 
 @client_bp.route('/task/<task_id>', methods=['GET'])
 def get_task(task_id):
+
+    #TODO:
+    #WARNING:This might be a little more complicated because tasks could be in either the node they are assigned to or in the active jobs category.
+    ####WARNING.
+
     app = cast(ExtendedFlask, current_app)
-    task = app.jobs_and_tasks_db.query("active_tasks", "task_id", str(task_id))
+    task = app.jobs_and_tasks_db.query_one_attribute("unassigned_tasks", "task_id", str(task_id))
     if task:
         return jsonify(task)
     else:

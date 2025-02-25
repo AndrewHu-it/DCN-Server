@@ -70,7 +70,7 @@ def generate_tasks(
             },
             "priority": priority,
             "output_data": {
-                "image_id": None,
+                "file_id": None,
                 "storage_method": "GridFS",
                 "file_name": None
             },
@@ -96,7 +96,7 @@ def create_job_and_tasks(
     *,
     num_tasks: int = 16,
     message: str = "Default Message",
-    priority: str = "LOW"
+    priority: str = "low"
 ) -> List[Any]:
     """
     Creates a job and its associated tasks for rendering a Mandelbrot set region.
@@ -130,6 +130,9 @@ def create_job_and_tasks(
     tasks = generate_tasks(x_min, x_max, y_min, y_max, width, height, num_tasks, job_id, priority)
     task_ids = [task["task_id"] for task in tasks]  # Extract task IDs for the job
 
+    tasks_dict = {task["task_id"]: None for task in tasks}
+
+
     job = {
         "job_id": job_id,
         "job_description": message,
@@ -149,12 +152,9 @@ def create_job_and_tasks(
                 "height": height
             }
         },
-        "tasks": task_ids,  # List of actual task IDs
-        "owner": client_id,
+        "tasks_and_nodes": tasks_dict,  # List of actual task IDs
+        "client_id": client_id,
         "priority": priority
     }
 
     return [job] + tasks  # Return job as first item, followed by tasks
-
-
-# No testing code included for production readiness

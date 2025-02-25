@@ -24,18 +24,45 @@ class DataBase:
 
 
 
+    def find_and_delete(self,collection:str, query):
+        collection = self.db[collection]
+
+        docs = list(collection.find(query))
+
+        for doc in docs:
+            if "_id" in doc:
+                doc["_id"] = str(doc["_id"])
+
+        collection.delete_many(query)
+
+        return docs
 
 
-    #Official Method
+    def update_field(self, collection, query, field, value):
+        """
+        Updates the specified 'field' to 'value' for all documents in 'collection'
+        that match the MongoDB filter 'query'.
+        Returns the number of documents modified.
+        """
+        collection = self.db[collection]
+        update_result = collection.update_many(query, {"$set": {field: value}})
+        return update_result.modified_count
+
+
+    def collection_size(self, collection: str):
+        return self.db[collection].count_documents({})
+
+    def create_collection(self, collection: str):
+        self.db.create_collection(collection)
+
     def add(self, collection: str, file: dict):
         """
         Pass in an arbitrary collection and file, will add it
         """
-
         collection = self.db[collection]
         return collection.insert_one(file)
 
-    def query(self, collection: str, attribute: str, value) -> list:
+    def query_one_attribute(self, collection: str, attribute: str, value) -> list:
         query_filter = {attribute: value}
         # Perform the MongoDB find operation, which returns a cursor
         cursor = self.db[collection].find(query_filter)
@@ -49,6 +76,25 @@ class DataBase:
                 doc["_id"] = str(doc["_id"])
 
         return results
+
+    def get_one(self,collection: str, query: dict) -> dict:
+        collection = self.db[collection]
+        return collection.find_one(query)
+
+    def get_all(self, collection: str):
+        collection = self.db[collection]
+        return list(collection.find({}))
+
+    def num_items_query(self, collection: str, query):
+        collection = self.db[collection]
+        return collection.count_documents(query)
+
+
+    #METHOD specifically for job:
+
+
+
+
 
 
 
