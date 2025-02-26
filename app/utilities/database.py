@@ -86,10 +86,9 @@ class DataBase:
 
     def query_one_attribute(self, collection: str, attribute: str, value) -> list:
         query_filter = {attribute: value}
-        # Perform the MongoDB find operation, which returns a cursor
         cursor = self.db[collection].find(query_filter)
 
-        # Convert the cursor to a list
+        #convert the cursor to a list
         results = list(cursor)
 
         # Convert each document's '_id' from ObjectId to string for compatibility
@@ -112,7 +111,7 @@ class DataBase:
         return collection.count_documents(query)
 
 
-    #GRID FS:
+    #METHODS for GRID FS:
 
     def get_file_gridfs(self, task_id: str):
 

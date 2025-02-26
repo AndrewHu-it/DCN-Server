@@ -8,22 +8,16 @@ from ..utilities.job_creator import create_job_and_tasks
 from ..utilities.assign_tasks import assign_task
 
 
-# Create the blueprint for client-related routes
 client_bp = Blueprint('client_bp', __name__, url_prefix='/client')
 
 
 @client_bp.route('/job', methods=['POST'])
 def upload_job():
-    """
-    Handle POST requests to create a new job and its associated tasks.
-    Expects JSON data with client details, job specifics, and Mandelbrot set parameters.
-    """
-    # Parse and validate incoming JSON data
+
     json_data = request.get_json()
     if not json_data or 'client_id' not in json_data:
         abort(400, description='Missing client_id')
 
-    # Extract required and optional fields from JSON
     client_id: str = json_data['client_id']
     job_description: str = json_data.get('job_description', 'No Description Provided')
     priority: str = json_data.get('priority', 'low')
@@ -51,20 +45,15 @@ def upload_job():
             priority=priority
         )
 
-        # Extract job and tasks from the returned list
         job: dict = jobs_and_tasks[0]
         tasks: list = jobs_and_tasks[1:]
 
-        # Access the database via the extended Flask app
+        # have to recast the app
         app = cast(ExtendedFlask, current_app)
-
-        # Insert the job into the "active_jobs" collection
         job_result = app.jobs_and_tasks_db.add("active_jobs", job)
         job["_id"] = str(job_result.inserted_id)
 
-
-
-        # Insert each task into the "unassigned_tasks" collection
+        #insert into unassigned
         for task in tasks:
             task_result = app.jobs_and_tasks_db.add("unassigned_tasks", task)
             task["_id"] = str(task_result.inserted_id)
@@ -77,7 +66,6 @@ def upload_job():
             assign_task(task_id)
 
 
-        # Return the job details with a 201 status code (Created)
         return_json: dict = {
             "job_id": job["job_id"],
             "client_id": job["client_id"],
@@ -88,10 +76,8 @@ def upload_job():
         return jsonify(return_json), 201
 
     except ValueError as e:
-        # Handle invalid inputs from create_job_and_tasks
         abort(400, description=str(e))
     except Exception as e:
-        # Handle general server errors, such as database issues
         abort(500, description=f"Server error: {str(e)}")
 
 
@@ -100,7 +86,6 @@ def get_job(job_id):
     """
     Handle GET requests to retrieve a job by its ID.
     Returns the job details if found, or a 404 error if not.
-
 
     """
 
@@ -112,6 +97,8 @@ def get_job(job_id):
     else:
         abort(404, description="Job not found")
 
+
+# TODO
 @client_bp.route('/task/<task_id>', methods=['GET'])
 def get_task(task_id):
 
@@ -127,15 +114,13 @@ def get_task(task_id):
         abort(404, description="Task not found")
 
 
-
 #Might want to create an endpoint to view an individual task as well.
 
 
 @client_bp.route('/task-result/<task_id>', methods=['GET'])
 def download_image(task_id: str):
-    # probably should first check that the task is complete.
-    print(task_id)
 
+    #TODO: Change this to streaming the image back so that the entire thing is not loaded into memory
     app = cast(ExtendedFlask, current_app)
 
     db = app.jobs_and_tasks_db
@@ -143,16 +128,12 @@ def download_image(task_id: str):
     if not grid_out:
         abort(404, description="No image found for the specified task_id in GridFS.")
 
-        # Derive MIME type
     content_type = getattr(grid_out, 'contentType', None)
     if not content_type:
-        # Attempt to guess from filename or default to 'image/png'
         content_type = mimetypes.guess_type(grid_out.filename or '')[0] or 'image/png'
 
-    # Read entire file into memory; for large files, consider streaming
     file_data = grid_out.read()
 
-    # Return as HTTP response
     return Response(file_data, mimetype=content_type)
 
 

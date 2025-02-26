@@ -99,26 +99,20 @@ def inbox(node_id: str):
     try:
         nodes: list = app.computing_nodes_db.query_one_attribute("all_nodes", "node_id", node_id)
         if len(nodes) == 0:
-            # If the node doesn't exist, respond with a 400 error
             abort(400, description='invalid node_id')
 
-        # Query how many tasks are assigned
         num_tasks = app.computing_nodes_db.num_items_query(collection, {"status": "ASSIGNED"})
 
-        # Query how many requests exist (indicated by the "data_request" field)
         num_requests = app.computing_nodes_db.num_items_query(collection, {"data_request": {"$exists": True}})
     except Exception as e:
-        # If something goes wrong during the database queries, log or handle error
-        app.logger.error(f"Database query failed for node_id={node_id}: {e}")
+        app.logger.error(f"Database query failed for node_id={node_id}: {e}") #TEST LOG
         abort(500, description='Internal Server Error')
 
-    # Prepare the JSON response
     json_response = {
         "num_tasks": num_tasks,
         "num_requests": num_requests,
     }
 
-    # Return the results as JSON with a 200 OK status
     return jsonify(json_response), 200
 
 @worker_node_bp.route('/task/<string:node_id>', methods=['GET'])
@@ -135,10 +129,10 @@ def get_task(node_id: str):
 def get_data_request():
     #TODO: Implement this when we add advanced data collection on the nodes, such as battery life and network speed testing.
 
-        return jsonify({})
+        return jsonify({"NOTHING YET": "nothing"})
 
 
-#TODO
+#TODO: some things wrong with this, need to update
 @worker_node_bp.route('/availability', methods=['PATCH'])
 def change_availability():
     """
@@ -158,10 +152,8 @@ def change_availability():
     node_id = json_data['node_id']
     availability_status = bool(json_data['availability'])
 
-    print(node_id, "   ", availability_status)
     app = cast(ExtendedFlask, current_app)
 
-    # This assumes you have a method called 'update_field' that updates a single field in a document.
     query = {"node_id": node_id}
     result = app.computing_nodes_db.update_field("all_nodes", query, "available", availability_status)
 
@@ -187,17 +179,9 @@ def change_availability():
     }), 200
 
 
-# TODO: Make temporary usernames and passwords for uploading tasks.
-# Current situation where I am passing around the connection string is really bad
 @worker_node_bp.route('/outbox', methods=['POST'])
 def outbox():
-    """
-    Handles task completion notifications from worker nodes.
-    Expects JSON payload with task details after successful GridFS image upload.
 
-    Returns:
-        JSON response with task details or error status
-    """
     try:
         json_data = request.get_json()
         if not json_data:
@@ -272,6 +256,9 @@ def outbox():
         current_app.logger.error(f"Error processing outbox request: {str(e)}")
         abort(500, description="Internal server error")
 
+
+# TODO: Make temporary usernames and passwords for uploading tasks.
+# Current situation where I am passing around the connection string is really bad, figure out temp credentials or something like that
 @worker_node_bp.route('/credentials', methods=['POST'])
 def get_credentials():
 

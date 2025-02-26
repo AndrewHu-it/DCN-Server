@@ -5,8 +5,7 @@ from typing import cast
 from app.extended_flask import ExtendedFlask
 import sys
 
-#This is the algorithm that I will work on extensively with ML regression of node performance etc later on.
-
+#This is the algorithm that I will work on extensively, ML -> review node performance etc later on.
 
 def assign_task(task_id: str):
     app = cast(ExtendedFlask, current_app)
