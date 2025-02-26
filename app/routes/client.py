@@ -1,4 +1,7 @@
-from flask import Blueprint, request, jsonify, abort, current_app
+import mimetypes
+
+import gridfs
+from flask import Blueprint, request, jsonify, abort, current_app, Response
 from typing import cast
 from app.extended_flask import ExtendedFlask
 from ..utilities.job_creator import create_job_and_tasks
@@ -81,6 +84,7 @@ def upload_job():
             "priority": job["priority"],
         }
 
+
         return jsonify(return_json), 201
 
     except ValueError as e:
@@ -121,3 +125,37 @@ def get_task(task_id):
         return jsonify(task)
     else:
         abort(404, description="Task not found")
+
+
+
+#Might want to create an endpoint to view an individual task as well.
+
+
+@client_bp.route('/task-result/<task_id>', methods=['GET'])
+def download_image(task_id: str):
+    # probably should first check that the task is complete.
+    print(task_id)
+
+    app = cast(ExtendedFlask, current_app)
+
+    db = app.jobs_and_tasks_db
+    grid_out = db.get_file_gridfs(task_id)
+    if not grid_out:
+        abort(404, description="No image found for the specified task_id in GridFS.")
+
+        # Derive MIME type
+    content_type = getattr(grid_out, 'contentType', None)
+    if not content_type:
+        # Attempt to guess from filename or default to 'image/png'
+        content_type = mimetypes.guess_type(grid_out.filename or '')[0] or 'image/png'
+
+    # Read entire file into memory; for large files, consider streaming
+    file_data = grid_out.read()
+
+    # Return as HTTP response
+    return Response(file_data, mimetype=content_type)
+
+
+
+
+

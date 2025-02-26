@@ -126,7 +126,6 @@ def get_task(node_id: str):
     #TODO: worry about priority later. If a task has higher priority send it first.
     #For now just get a random task.
 
-
     app = cast(ExtendedFlask, current_app)
     collection = f"inbox_{node_id}"
     task: dict = app.computing_nodes_db.get_one(collection, {"status": {"$eq": "ASSIGNED"}})
@@ -192,36 +191,86 @@ def change_availability():
 # Current situation where I am passing around the connection string is really bad
 @worker_node_bp.route('/outbox', methods=['POST'])
 def outbox():
-    #If it is a data request:
-        #Gather results and put in dump.
-
-    #if it is a task submission:
-        #get the node id
-        #get the task id --> find the  task in the node's inbox and remove it should be labeled processing
-        #change the relevent fields of the dictionary.
-        #repload it to the outbox category with the fields changed.
-
     """
-    FIELDS TO CHANGE:
-    'completed_at' --> get date
-    ''
-    'image_id' --> <task_id>.png
-    'date_completed' --> get date
+    Handles task completion notifications from worker nodes.
+    Expects JSON payload with task details after successful GridFS image upload.
 
-
+    Returns:
+        JSON response with task details or error status
     """
+    try:
+        json_data = request.get_json()
+        if not json_data:
+            abort(400, description="No JSON data provided")
 
+        # Validate required base fields
+        required_fields = ['node_id', 'type']
+        for field in required_fields:
+            if field not in json_data:
+                abort(400, description=f"Missing required field: {field}")
 
+        node_id = json_data['node_id']
+        task_type = json_data['type'].lower()
 
-    #if it is a data request, simply upload the data to the outbox.
+        if task_type == "task":
+            # Validate task-specific fields
+            task_fields = ['task_id', 'image_id', 'file_name']
+            for field in task_fields:
+                if field not in json_data:
+                    abort(400, description=f"Missing required field for task: {field}")
 
-    #if it is a task completion: upload all relevant parts of the task to the DB (links to the image, do this AFTER it has uploaded the image to the DB)
+            task_id = json_data['task_id']
+            app = cast(ExtendedFlask, current_app)
 
+            # Database operations
+            inbox_collection = f"inbox_{node_id}"
+            outbox_collection = f"outbox_{node_id}"
 
-    #the Worker node will respond to the requests by publishing its answers here.
-    # Includes: Network speed tests, battery life, results of tasks.
-    return jsonify({"Nothing yet": "test for outbox"})
+            # Find and remove task from inbox
+            query = {"task_id": task_id}
+            task_result = app.computing_nodes_db.find_and_delete(inbox_collection, query)
 
+            if not task_result:
+                abort(404, description=f"No task found with ID: {task_id}")
+
+            task = task_result[0]
+
+            # Update task with completion details
+            task['completed_at'] = {"$date": datetime.utcnow().isoformat() + "Z"}
+            task['output_data'] = task.get('output_data', {})
+            task['output_data'].update({
+                'image_id': json_data['image_id'],
+                'file_name': json_data['file_name']
+            })
+            task['status'] = "COMPLETED"
+
+            # Add to outbox
+            app.computing_nodes_db.add(outbox_collection, task)
+
+            # Update node statistics
+            nodes_query = {"node_id": node_id}
+            app.computing_nodes_db.increment_field(
+                "all_nodes",
+                nodes_query,
+                "tasks_completed",
+                1
+            )
+
+            return jsonify(task)
+
+        elif task_type == "data_request":
+            # Placeholder for future implementation
+            return jsonify({
+                "status": "Data request processing not yet implemented",
+                "node_id": node_id
+            })
+
+        else:
+            abort(400, description=f"Unsupported task type: {task_type}")
+
+    except Exception as e:
+        current_app.logger.error(f"Error processing outbox request: {str(e)}")
+        abort(500, description="Internal server error")
 
 @worker_node_bp.route('/credentials', methods=['POST'])
 def get_credentials():

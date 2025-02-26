@@ -1,3 +1,4 @@
+import gridfs
 from bson import ObjectId
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -22,9 +23,7 @@ class DataBase:
         self.db = self.client[db_name]
 
 
-
-
-    def find_and_delete(self,collection:str, query):
+    def find_and_delete(self, collection:str, query):
         collection = self.db[collection]
 
         docs = list(collection.find(query))
@@ -37,15 +36,38 @@ class DataBase:
 
         return docs
 
+    def update_field(self, collection: str, query: dict, field: str, value: any) -> int:
+        """
+        Updates the specified field to value for all documents matching the query.
 
-    def update_field(self, collection, query, field, value):
+        Args:
+            collection: Name of the MongoDB collection
+            query: MongoDB filter query
+            field: Field to update
+            value: New value for the field
+
+        Returns:
+            Number of documents modified
         """
-        Updates the specified 'field' to 'value' for all documents in 'collection'
-        that match the MongoDB filter 'query'.
-        Returns the number of documents modified.
+        collection_obj = self.db[collection]
+        update_result = collection_obj.update_many(query, {"$set": {field: value}})
+        return update_result.modified_count
+
+    def increment_field(self, collection: str, query: dict, field: str, amount: int) -> int:
         """
-        collection = self.db[collection]
-        update_result = collection.update_many(query, {"$set": {field: value}})
+        Increments the specified field by the given amount for matching documents.
+
+        Args:
+            collection: Name of the MongoDB collection
+            query: MongoDB filter query
+            field: Field to increment
+            amount: Amount to increment by
+
+        Returns:
+            Number of documents modified
+        """
+        collection_obj = self.db[collection]
+        update_result = collection_obj.update_many(query, {"$inc": {field: amount}})
         return update_result.modified_count
 
 
@@ -90,7 +112,21 @@ class DataBase:
         return collection.count_documents(query)
 
 
-    #METHOD specifically for job:
+    #GRID FS:
+
+    def get_file_gridfs(self, task_id: str):
+
+        fs = gridfs.GridFS(self.db)
+
+        doc = self.db.fs.files.find_one({"metadata.task_id": task_id})
+
+        if doc and "_id" in doc:
+            return fs.get(doc["_id"])
+        else:
+            return None
+
+
+
 
 
 
