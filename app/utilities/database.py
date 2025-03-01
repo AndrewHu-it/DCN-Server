@@ -114,11 +114,8 @@ class DataBase:
     #METHODS for GRID FS:
 
     def get_file_gridfs(self, task_id: str):
-
         fs = gridfs.GridFS(self.db)
-
         doc = self.db.fs.files.find_one({"metadata.task_id": task_id})
-
         if doc and "_id" in doc:
             return fs.get(doc["_id"])
         else:
