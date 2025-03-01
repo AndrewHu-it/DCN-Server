@@ -1,7 +1,10 @@
+import json
 import os
 import secrets
 import uuid
 from datetime import datetime, timedelta
+
+import gridfs
 from flask import Blueprint, request, jsonify, abort, current_app
 from typing import cast
 from app.extended_flask import ExtendedFlask
@@ -10,8 +13,6 @@ from app.extended_flask import ExtendedFlask
 A Few NOTES: 
 - Need to consider what happens when we turn off a node in the middle of processing a task.
 """
-
-
 
 worker_node_bp = Blueprint('worker_node_bp', __name__, url_prefix='/node')
 
@@ -85,7 +86,7 @@ def bad_request(error):
 def server_error(error):
     return {"status": "error", "message": "Internal server error"}, 500
 
-#COMPLETED
+
 @worker_node_bp.route('/inbox/<string:node_id>', methods=['GET'])
 def inbox(node_id: str):
     """
@@ -130,6 +131,7 @@ def get_data_request():
     #TODO: Implement this when we add advanced data collection on the nodes, such as battery life and network speed testing.
 
         return jsonify({"NOTHING YET": "nothing"})
+
 
 
 #TODO: some things wrong with this, need to update
@@ -181,57 +183,40 @@ def change_availability():
 
 @worker_node_bp.route('/outbox', methods=['POST'])
 def outbox():
-
+#TODO: UPDATE THIS CODE TO BE USED FOR INFORMATION REQUESTS. The sections of this code needed for uploading the image are not needed.
     try:
         json_data = request.get_json()
         if not json_data:
             abort(400, description="No JSON data provided")
-
-        # Validate required base fields
         required_fields = ['node_id', 'type']
         for field in required_fields:
             if field not in json_data:
                 abort(400, description=f"Missing required field: {field}")
-
         node_id = json_data['node_id']
         task_type = json_data['type'].lower()
-
         if task_type == "task":
             # Validate task-specific fields
             task_fields = ['task_id', 'image_id', 'file_name']
             for field in task_fields:
                 if field not in json_data:
                     abort(400, description=f"Missing required field for task: {field}")
-
             task_id = json_data['task_id']
             app = cast(ExtendedFlask, current_app)
-
-            # Database operations
             inbox_collection = f"inbox_{node_id}"
             outbox_collection = f"outbox_{node_id}"
-
-            # Find and remove task from inbox
             query = {"task_id": task_id}
             task_result = app.computing_nodes_db.find_and_delete(inbox_collection, query)
-
             if not task_result:
                 abort(404, description=f"No task found with ID: {task_id}")
-
             task = task_result[0]
-
-            # Update task with completion details
-            task['completed_at'] = {"$date": datetime.utcnow().isoformat() + "Z"}
+            task['completed_at'] = datetime.utcnow()  # Fixed to use datetime object
             task['output_data'] = task.get('output_data', {})
             task['output_data'].update({
                 'image_id': json_data['image_id'],
                 'file_name': json_data['file_name']
             })
             task['status'] = "COMPLETED"
-
-            # Add to outbox
             app.computing_nodes_db.add(outbox_collection, task)
-
-            # Update node statistics
             nodes_query = {"node_id": node_id}
             app.computing_nodes_db.increment_field(
                 "all_nodes",
@@ -239,16 +224,15 @@ def outbox():
                 "tasks_completed",
                 1
             )
-
             return jsonify(task)
-
         elif task_type == "data_request":
+            #TODO: This is the only reason to include this code, which is that I will need it for uploading information requests.
+
             # Placeholder for future implementation
             return jsonify({
                 "status": "Data request processing not yet implemented",
                 "node_id": node_id
             })
-
         else:
             abort(400, description=f"Unsupported task type: {task_type}")
 
@@ -257,32 +241,93 @@ def outbox():
         abort(500, description="Internal server error")
 
 
-# TODO: Make temporary usernames and passwords for uploading tasks.
-# Current situation where I am passing around the connection string is really bad, figure out temp credentials or something like that
+# TODO: no longer used in upload process, possibly still a good idea to keep around in case needed.
 @worker_node_bp.route('/credentials', methods=['POST'])
 def get_credentials():
-
     json_data = request.get_json()
     if not json_data or 'node_id' not in json_data:
         abort(400, description='Missing node_id')
     node_id = json_data['node_id']
-
-
     app = cast(ExtendedFlask, current_app)
-
     node = app.computing_nodes_db.query_one_attribute("all_nodes", "node_id", node_id)
     if not node:
         abort(400, description='Invalid or unavailable node_id')
-
     connection_string = os.getenv("NODE_MONGO_CONNECTION_STRING")
-
     return jsonify({
         "connection_string": connection_string,
     }), 200
 
 
+@worker_node_bp.route('/submit-image', methods=['POST'])
+def submit_image():
+    """
+    Endpoint to receive an image from a worker node, upload it to GridFS,
+    move the associated task from inbox to outbox, and update node statistics.
+    """
+    try:
+        # Extract form data from the request
+        node_id = request.form.get('node_id')
+        task_id = request.form.get('task_id')
+        metadata_str = request.form.get('metadata')
+        image_file = request.files.get('image')
 
+        # Validate required fields
+        if not all([node_id, task_id, metadata_str, image_file]):
+            abort(400, description="Missing required fields: node_id, task_id, metadata, or image")
 
+        # Parse metadata JSON
+        metadata = json.loads(metadata_str)
 
+        # Access the app and database
+        app = cast(ExtendedFlask, current_app)
+        db = app.jobs_and_tasks_db.db  # Assuming db is the raw MongoDB database object
+
+        # Upload the image to GridFS
+        fs = gridfs.GridFS(db)
+        grid_fs_id = fs.put(image_file, **metadata)  # Use metadata as provided by the node
+
+        # Database operations for task completion
+        inbox_collection = f"inbox_{node_id}"
+        outbox_collection = f"outbox_{node_id}"
+
+        # Find and remove task from inbox
+        query = {"task_id": task_id}
+        task_result = app.computing_nodes_db.find_and_delete(inbox_collection, query)
+
+        if not task_result:
+            abort(404, description=f"No task found with ID: {task_id}")
+
+        task = task_result[0]
+
+        # Update task with completion details
+        task['completed_at'] = datetime.utcnow()
+        task['output_data'] = task.get('output_data', {})
+        task['output_data'].update({
+            'image_id': str(grid_fs_id),
+            'file_name': metadata["filename"]
+        })
+        task['status'] = "COMPLETED"
+
+        # Add to outbox
+        app.computing_nodes_db.add(outbox_collection, task)
+
+        # Update node statistics
+        nodes_query = {"node_id": node_id}
+        app.computing_nodes_db.increment_field(
+            "all_nodes",
+            nodes_query,
+            "tasks_completed",
+            1
+        )
+
+        return jsonify({
+            "message": "Image uploaded and task completed successfully",
+            "image_id": str(grid_fs_id)
+        }), 200
+
+    except json.JSONDecodeError:
+        abort(400, description="Invalid metadata format")
+    except Exception as e:
+        abort(500, description=f"Server error: {str(e)}")
 
 
