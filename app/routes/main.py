@@ -7,7 +7,7 @@ main_bp = Blueprint('main_bp', __name__, url_prefix='/')
 
 @main_bp.route('/', methods=['GET'])
 def main():
-    return jsonify({"Nothing yet": "test"})
+    return jsonify({"Nothing yet": "test2"})
 
 
 
